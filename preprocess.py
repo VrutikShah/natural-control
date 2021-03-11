@@ -3,16 +3,11 @@
 """This file contains a function to read the GloVe vectors from file,
 and return them as an embedding matrix"""
 
-from __future__ import absolute_import
-from __future__ import division
-
-# from tensorflow.python.platform import gfile
-# import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 import re
 import nltk
-
+import os
 
 _PAD = b"<pad>"
 _UNK = b"<unk>"
@@ -243,16 +238,18 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
         if None, basic_tokenizer will be used.
       normalize_digits: Boolean; if true, all digits are replaced by 0s.
     """
-    if not gfile.Exists(vocabulary_path):
+    if not os.path.exists(vocabulary_path):
         print("Creating vocabulary %s from data %s" % (vocabulary_path, data_path))
         vocab = {}
-        with gfile.GFile(data_path, mode="rb") as f:
+        with open(data_path, mode="rb") as f:
             counter = 0
             for line in f:
                 counter += 1
                 if counter % 100000 == 0:
                     print("  processing line %d" % counter)
-                line = tf.compat.as_bytes(line)
+                
+                # TODO - CHANGE THE BELOW LINE
+                # line = tf.compat.as_bytes(line)
                 tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
                 for w in tokens:
                     word = _DIGIT_RE.sub(b"0", w) if normalize_digits else w
@@ -263,7 +260,7 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
             vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
             if len(vocab_list) > max_vocabulary_size:
                 vocab_list = vocab_list[:max_vocabulary_size]
-            with gfile.GFile(vocabulary_path, mode="wb") as vocab_file:
+            with open(vocabulary_path, mode="wb") as vocab_file:
                 for w in vocab_list:
                     vocab_file.write(w + b"\n")
         rev_vocab = vocab_list # a list contain all the tokens
@@ -292,11 +289,13 @@ def initialize_vocabulary(vocabulary_path):
   Raises:
     ValueError: if the provided vocabulary_path does not exist.
   """
-  if gfile.Exists(vocabulary_path):
+  if os.path.exists(vocabulary_path):
     rev_vocab = []
-    with gfile.GFile(vocabulary_path, mode="rb") as f:
+    with open(vocabulary_path, mode="rb") as f:
       rev_vocab.extend(f.readlines())
-    rev_vocab = [tf.compat.as_bytes(line.strip()) for line in rev_vocab]
+    
+    # TODO - CHANGE THE BELOW LINE
+    # rev_vocab = [tf.compat.as_bytes(line.strip()) for line in rev_vocab]
     vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
     return vocab, rev_vocab
   else:

@@ -20,3 +20,14 @@ ANSWER_LEN = 50
 EMBEDDING_SIZE = 100
 
 # SAMPLING CONSTANTS
+
+glove_path = 
+emb_matrix, word2id, id2word = get_glove(glove_path, 100)
+
+context_vocab_path = "./data/vocab200.context"
+train_context_path = "./data/train.graph"
+context_vocab, rev_context_vocab = create_vocabulary(
+    context_vocab_path,
+    train_context_path,
+    200)
+

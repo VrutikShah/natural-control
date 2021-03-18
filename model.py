@@ -22,38 +22,36 @@ class Encoder(nn.Module):
         
         # can add Dropout layer
 
-class Decoder(nn.Module):
-    def __init__(self, batch_size, hidden_size, tgt_vocab_size, max_decoder_length, embeddings, 
-                keep_prob, sampling_prob, schedule_embed=False, pred_method='greedy'):
-        self.hidden_size = hidden_size
-        self.projection_layer = nn.Linear(hidden_size,tgt_vocab_size)
-        self.gru = nn.GRU(hidden_size,hidden_size)
-        self.batch_size = batch_size
-        self.embeddings = embeddings
-        self.start_id = SOS_ID
-        self.end_id = PAD_ID
-        self.tgt_vocab_size = tgt_vocab_size
-        self.max_decoder_length = max_decoder_length
-        self.keep_prob = keep_prob
-        self.schedule_embed = schedule_embed
-        self.pred_method = pred_method
-        self.beam_width = 9
-        self.sampling_prob = sampling_prob
+# class Decoder(nn.Module):
+#     def __init__(self, batch_size, hidden_size, tgt_vocab_size, max_decoder_length, embeddings, 
+#                 keep_prob, sampling_prob, schedule_embed=False, pred_method='greedy'):
+#         self.hidden_size = hidden_size
+#         self.projection_layer = nn.Linear(hidden_size,tgt_vocab_size)
+#         self.gru = nn.GRU(hidden_size,hidden_size)
+#         self.batch_size = batch_size
+#         self.embeddings = embeddings
+#         self.start_id = SOS_ID
+#         self.end_id = PAD_ID
+#         self.tgt_vocab_size = tgt_vocab_size
+#         self.max_decoder_length = max_decoder_length
+#         self.keep_prob = keep_prob
+#         self.schedule_embed = schedule_embed
+#         self.pred_method = pred_method
+#         self.beam_width = 9
+#         self.sampling_prob = sampling_prob
 
-    def forward(self, blended_reps_final, encoder_hidden, decoder_emb_inputs, ans_masks, ans_ids, context_masks):
-        start_ids = ans_ids[:,0]
-        train_output = blended_reps_final
-        context_lengths = torch.Tensor([context_masks.size(1)]*self.batch_size)
-        decoder_lengths = torch.Tensor([context_masks.size(1)]*self.batch_size)
+#     def forward(self, blended_reps_final, encoder_hidden, decoder_emb_inputs, ans_masks, ans_ids, context_masks):
+#         start_ids = ans_ids[:,0]
+#         train_output = blended_reps_final
+#         context_lengths = torch.Tensor([context_masks.size(1)]*self.batch_size)
+#         decoder_lengths = torch.Tensor([context_masks.size(1)]*self.batch_size)
 
-        # traininghelper vali lines
+#         # traininghelper vali lines
 
-        pred_start_ids = ans_ids[:,0]
+#         pred_start_ids = ans_ids[:,0]
 
-        # pred_helper vali lines
+#         # pred_helper vali lines
 
-
-        pass
 
 
 class Attn(nn.Module):
@@ -165,12 +163,17 @@ class BasicAttn(nn.Module):
 
         values_t = torch.transpose(values, 1, 2) # -> (batch_size, value_vec_size, num_values)
         def fn(a, x):
-            return torch.matmul(x, w)
+            return torch.matmul(x, W).numpy()
 
-        # TODO - CORRECT THIS PART
-        part_logits = [fn(_, x) for x in keys]
-        
-        attn_logits = torch.bmm()
+        list_ = [fn(8, keys[i, :,:]) for i in range(keys.shape[0])]
+        part_logits = torch.Tensor(list_) # (batch_size, num_keys, value_vec)
+
+        attn_logits = torch.bmm(part_logits, values_t) # -> (batch_size, num_keys, num_values)
+        _, attn_dist = masked_softmax(attn_logits, attn_logits_mask, dim)
+
+        output = torch.matmul(attn_dist, values)
+
+        return attn_dist, output
 
         
 
@@ -210,8 +213,17 @@ class QAModel(nn.Module):
         blended_reps_final = linear41(blended_reps)
 
 
-        dec_output,dec_hidden = decoder(self.ans_embs,blended_reps_final,question_last_hidden)
-        # Calculate Logits and return
+        self.dec_output,self.dec_hidden = decoder(self.ans_embs,blended_reps_final,question_last_hidden)
+        
+
+
+
         # ----------------------------------- #
-    
-    
+        
+
+
+def masked_softmax(logits, masks, dim):
+    inf_mask = (1 - masks.type(torch.FloatTensor)) * (-1e30)
+    masked_logits = torch.add(logits, inf_mask)
+    softmax_out = nn.Softmax(masked_logits, dim)
+    return masked_logits, softmax_out

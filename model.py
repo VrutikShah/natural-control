@@ -1,11 +1,15 @@
 # the Model
+import math
+import time
+
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
-from preprocess import create_vocab_class
+from torch.autograd import Variable
 
-from preprocess import SOS_ID, PAD_ID
+from preprocess import PAD_ID, SOS_ID, create_vocab_class
+
 
 class Encoder(nn.Module):
     def __init__(self,hidden_size,embedding_size,keep_prob):
@@ -51,7 +55,6 @@ class Encoder(nn.Module):
 #         pred_start_ids = ans_ids[:,0]
 
 #         # pred_helper vali lines
-
 
 
 class Attn(nn.Module):
@@ -148,7 +151,6 @@ class DecoderRNN(nn.Module):
 
 
 
-
 class BasicAttn(nn.Module):
     def __init__(self, keep_prob, key_vec_size, value_vec_size):
         self.keep_prob = keep_prob
@@ -175,51 +177,60 @@ class BasicAttn(nn.Module):
 
         return attn_dist, output
 
-        
-
-
-
-
-
 
 class QAModel(nn.Module):
-    def __init__(self, id2word, word2id, emb_matrix, ans2id, id2ans, context2id,hidden_size,embedding_size,tgt_vocab_size):
+    def __init__(self, id2word, word2id, emb_matrix, ans2id, id2ans, context2id,hidden_size, embedding_size, tgt_vocab_size):
+        self.hidden_size = hidden_size
+        self.embedding_size = embedding_size
+        self.tgt_vocab_size = tgt_vocab_size
         self.id2word = id2word
         self.word2id = word2id
         self.ans_vocab_size = len(ans2id)
         self.ans2id = ans2id
         self.id2ans = id2ans
+        self.emb_matrix = emb_matrix
         self.context2id = context2id
+        self.embedding = nn.Embedding(len(context2id),embedding_size)
         self.linear21 = nn.Linear(2*hidden_size,hidden_size)
         self.linear41 = nn.Linear(4*hidden_size,hidden_size)
         self.graph_vocab_class = create_vocab_class(context2id)
         self.context_dimension_compressed = len(self.graph_vocab_class.all_tokens) + len(self.graph_vocab_class.nodes)
         self.decoder = DecoderRNN(hidden_size,embedding_size,tgt_vocab_size)
 
-    def forward(self):
-        
-        context_encoder = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
-        context_hiddens = context_encoder.build_graph(self.context_embs, self.context_mask)  # (batch_size, context_len, hidden_size*2)
+    def forward(self,qn_ids,context_ids,ans_ids,qn_mask):
+        self.context_embs = self.embedding(context_ids)
+        context_encoder = Encoder(self.hidden_size,self.embedding_size, self.keep_prob)
+        context_hiddens = context_encoder(self.context_embs)  # (batch_size, context_len, hidden_size*2)
 
-        question_encoder = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
-        question_hiddens = question_encoder.build_graph(self.qn_embs, self.qn_mask)  # (batch_size, question_len, hidden_size*2)
+        self.qn_embs = self.get_embeddings(self.ans2id,self.emb_matrix,qn_ids,self.embedding_size)
+        question_encoder = Encoder(self.hidden_size,self.embedding_size, self.keep_prob)
+        question_hiddens = question_encoder(self.qn_embs)  # (batch_size, question_len, hidden_size*2)
         question_last_hidden = question_hiddens[:, -1, :]
         question_last_hidden = self.linear21(question_last_hidden)
 
-        attn_layer = BasicAttn(self.keep_prob, self.FLAGS.hidden_size * 2, self.FLAGS.hidden_size * 2)
-        _, attn_output = attn_layer(question_hiddens, self.qn_mask, context_hiddens)
+        attn_layer = BasicAttn(self.keep_prob, self.hidden_size * 2, self.hidden_size * 2)
+        _, attn_output = attn_layer(question_hiddens, qn_mask, context_hiddens)
         # Concat attn_output to context_hiddens to get blended_reps
         blended_reps = torch.cat(context_hiddens, attn_output, axis=2)  # (batch_size, context_len, hidden_size*4)
-        blended_reps_final = linear41(blended_reps)
-
-
-        self.dec_output,self.dec_hidden = decoder(self.ans_embs,blended_reps_final,question_last_hidden)
+        blended_reps_final = self.linear41(blended_reps)
+        self.dec_hidden = question_last_hidden
+        # Idhar for loop lagaane ka hai
+        for idx in range(len(ans_ids)):
+            self.dec_output,self.dec_hidden = self.decoder(self.ans_ids[idx],self.dec_hidden,blended_reps_final)
+            # topk
+            # loss add
+        return self.dec_output, self.dec_hidden #, loss
         
-
-
-
         # ----------------------------------- #
         
+    def get_embeddings(self,token2id,embed_matrix,input_ids,embed_size):
+        array = np.zeros(len(input_ids),embed_size)
+        for idx,token_id in enumerate(input_ids):
+            # either token or token ID, check that
+            array[idx,:] = embed_matrix[token_id]
+        vector = torch.from_numpy(array)
+        return vector
+
 
 
 def masked_softmax(logits, masks, dim):

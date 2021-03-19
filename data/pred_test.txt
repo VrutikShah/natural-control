@@ -1,0 +1,7 @@
+O-3 oor C-0 cf C-0 cf C-0 iol O-0
+B-0 ool C-0 cf C-0 ior O-2
+O-1 oor C-0 cf C-0 cf C-0 iol K-1
+O-0 ool C-0 cf C-0 cf C-0 iol K-1
+B-0 ool C-0 cf C-0 iol O-3
+O-2 ool C-0 cf C-0 cf C-0 cf C-0 cf C-0 iol K-1
+O-3 oor C-0 cf C-0 cf C-0 ior O-1

@@ -6,13 +6,13 @@ import time
 import re
 
 import numpy as np
-from vocab import PAD_ID, UNK_ID, SOS_ID, Vocab, create_vocab_class, instruction_tokenizer
+from preprocess import PAD_ID, UNK_ID, SOS_ID, Vocab, create_vocab_class, instruction_tokenizer
 
 class Batch(object):
     """A class to hold the information needed for a training batch"""
 
     def __init__(self, context_ids, context_tokens, qn_ids, qn_mask, qn_tokens, ans_ids, ans_mask,
-                 ans_tokens):
+                 ans_tokens, batch_size):
         """
         Inputs:
           {context/qn}_ids: Numpy arrays.
@@ -23,9 +23,9 @@ class Batch(object):
           ans_span: numpy array, shape (batch_size, 2)
         """
         self.context_ids = context_ids
-        self.context_mask = context_mask
+        # self.context_mask = context_mask
         self.context_tokens = context_tokens
-        self.context_embeddings = context_embeddings
+        # self.context_embeddings = context_embeddings
 
         self.qn_ids = qn_ids
         self.qn_mask = qn_mask
@@ -35,7 +35,7 @@ class Batch(object):
         self.ans_mask = ans_mask
         self.ans_tokens = ans_tokens
 
-        self.batch_size = len(self.context_tokens)
+        self.batch_size = batch_size
 
 
 def split_by_whitespace(sentence):
@@ -113,11 +113,11 @@ def refill_batches(batches, word2id, context2id, ans2id, context_file, qn_file, 
       discard_long: If True, discard any examples that are longer than context_len or question_len.
         If False, truncate those exmaples instead.
     """
-    print "Refilling batches..."
+    print("Refilling batches...")
     tic = time.time()
     examples = []  # list of (qn_ids, context_ids, ans_span, ans_tokens) triples
     context_line, qn_line, ans_line = context_file.readline(), qn_file.readline(), ans_file.readline()  # read the next line from each
-
+    # print(context_line,qn_line,ans_line)
     while context_line and qn_line and ans_line:  # while you haven't reached the end
 
         # Reorganize the map to make the nodes containing the start point comes at the front.
@@ -179,7 +179,7 @@ def refill_batches(batches, word2id, context2id, ans2id, context_file, qn_file, 
         examples = sorted(examples, key=lambda e: len(e[0]))
 
     # Make into batches and append to the list batches
-    for batch_start in xrange(0, len(examples), batch_size):
+    for batch_start in range(0, len(examples), batch_size):
         # Note: each of these is a list length batch_size of lists of ints (except on last iter when it might be less than batch_size)
         context_ids_batch, context_tokens_batch, qn_ids_batch, qn_tokens_batch, ans_span_batch, ans_tokens_batch = zip(
             *examples[batch_start:batch_start + batch_size])
@@ -191,49 +191,49 @@ def refill_batches(batches, word2id, context2id, ans2id, context_file, qn_file, 
         random.shuffle(batches)
 
     toc = time.time()
-    print "Refilling batches took %.2f seconds" % (toc - tic)
+    print("Refilling batches took %.2f seconds" % (toc - tic))
     return
 
-# ONLY used for computing vector for triplets in graph.
-def compute_graph_embedding(batch_tokens, vocab_class, max_len, start_tokens=None):
-    # [flag, node, edge, node]
-    dimension = len(vocab_class.flags) + len(vocab_class.nodes) + len(vocab_class.edges) + len(vocab_class.nodes)
-    # print "whole dimension {}, node {}, edge {}".format(dimension, len(vocab_class.nodes), len(vocab_class.edges))
-    # whole dimension 211, node 78, edge 52
-    # if choose to group tokens by edge or node.
-    graph_embeddings = np.zeros((len(batch_tokens), max_len, dimension))
-    context_mask = np.ones((len(batch_tokens), max_len))
-    for i, sentence_tokens in enumerate(batch_tokens):
-        ids = vocab_class.tidy_in_triplet(sentence_tokens)
-        sentence_array = np.zeros((max_len, dimension))
-        graph_len = int(len(ids) / 3)
+# # ONLY used for computing vector for triplets in graph.
+# def compute_graph_embedding(batch_tokens, vocab_class, max_len, start_tokens=None):
+#     # [flag, node, edge, node]
+#     dimension = len(vocab_class.flags) + len(vocab_class.nodes) + len(vocab_class.edges) + len(vocab_class.nodes)
+#     # print "whole dimension {}, node {}, edge {}".format(dimension, len(vocab_class.nodes), len(vocab_class.edges))
+#     # whole dimension 211, node 78, edge 52
+#     # if choose to group tokens by edge or node.
+#     graph_embeddings = np.zeros((len(batch_tokens), max_len, dimension))
+#     # context_mask = np.ones((len(batch_tokens), max_len))
+#     for i, sentence_tokens in enumerate(batch_tokens):
+#         ids = vocab_class.tidy_in_triplet(sentence_tokens)
+#         sentence_array = np.zeros((max_len, dimension))
+#         graph_len = int(len(ids) / 3)
 
-        if graph_len < max_len:
-            sentence_array[np.arange(graph_len, max_len), PAD_ID] = 1
-            context_mask[i, np.arange(graph_len, max_len)] = 0
-        # elif graph_len > max_len:
-        #     print "found one long graph.", graph_len
-        for number_of_triplets, index in enumerate(range(len(ids))[: max_len * 3: 3]):
-            node1, edge, node2 = ids[index: index + 3]
-            for node_id in node1:
-                prefix_len = len(vocab_class.flags)
-                sentence_array[number_of_triplets, prefix_len + node_id] = 1
-            for edge_id in edge:
-                prefix_len = len(vocab_class.flags) + len(vocab_class.nodes)
-                sentence_array[number_of_triplets, prefix_len + edge_id] = 1
-            for node_id in node2:
-                prefix_len = len(vocab_class.all_tokens)
-                sentence_array[number_of_triplets, prefix_len + node_id] = 1
-        # if given the start tokens, we need to append it to the end of graph representation.
-        # In case of long graph, we truncate the graph and still append the start tokens.
-        if start_tokens is not None:
-            last_index = min(number_of_triplets + 1, max_len - 1)
-            sentence_array[last_index, SOS_ID] = 1
-            sentence_array[last_index, PAD_ID] = 0
-            sentence_array[last_index, len(vocab_class.flags) + vocab_class.node2id[start_tokens[i]]] = 1
-            context_mask[i, last_index] = 1
-        graph_embeddings[i, :, :] = sentence_array
-    return graph_embeddings, context_mask
+#         if graph_len < max_len:
+#             sentence_array[np.arange(graph_len, max_len), PAD_ID] = 1
+#             # context_mask[i, np.arange(graph_len, max_len)] = 0
+#         # elif graph_len > max_len:
+#         #     print "found one long graph.", graph_len
+#         for number_of_triplets, index in enumerate(range(len(ids))[: max_len * 3: 3]):
+#             node1, edge, node2 = ids[index: index + 3]
+#             for node_id in node1:
+#                 prefix_len = len(vocab_class.flags)
+#                 sentence_array[number_of_triplets, prefix_len + node_id] = 1
+#             for edge_id in edge:
+#                 prefix_len = len(vocab_class.flags) + len(vocab_class.nodes)
+#                 sentence_array[number_of_triplets, prefix_len + edge_id] = 1
+#             for node_id in node2:
+#                 prefix_len = len(vocab_class.all_tokens)
+#                 sentence_array[number_of_triplets, prefix_len + node_id] = 1
+#         # if given the start tokens, we need to append it to the end of graph representation.
+#         # In case of long graph, we truncate the graph and still append the start tokens.
+#         if start_tokens is not None:
+#             last_index = min(number_of_triplets + 1, max_len - 1)
+#             sentence_array[last_index, SOS_ID] = 1
+#             sentence_array[last_index, PAD_ID] = 0
+#             sentence_array[last_index, len(vocab_class.flags) + vocab_class.node2id[start_tokens[i]]] = 1
+#             # context_mask[i, last_index] = 1
+#         graph_embeddings[i, :, :] = sentence_array
+#     return graph_embeddings, context_mask
 
 def get_batch_generator(word2id, context2id, ans2id, context_path, qn_path, ans_path, batch_size, graph_vocab_class,
                         context_len, question_len, answer_len, discard_long, shuffle=True, output_goal=False):
@@ -252,7 +252,7 @@ def get_batch_generator(word2id, context2id, ans2id, context_path, qn_path, ans_
       shuffle: whether to shuffle the sequence of data.
       show_start_tokens: whether to append the start token at the end of the graph.
     """
-    context_file, qn_file, ans_file = open(context_path), open(qn_path), open(ans_path)
+    context_file, qn_file, ans_file = open(context_path, encoding="utf-8"), open(qn_path, encoding="utf-8"), open(ans_path, encoding="utf-8")
     batches = []
 
 
@@ -277,21 +277,22 @@ def get_batch_generator(word2id, context2id, ans2id, context_path, qn_path, ans_
 
         # Make context_ids into a np array and create context_mask
         context_ids = np.array(context_ids)  # shape (batch_size, context_len)
-        context_mask = (context_ids != PAD_ID).astype(np.int32)  # shape (batch_size, context_len)
+        # context_mask = (context_ids != PAD_ID).astype(np.int32)  # shape (batch_size, context_len)
 
         # Make ans_ids into a np array and create ans_mask
         ans_ids = np.array(ans_ids)
         ans_mask = (ans_ids != PAD_ID).astype(np.int32)
-
+        # print(list(ans_ids), list(context_ids), list(qn_ids))
         # interpret graph as triplets and append the first token
         # if not show_start_tokens:
-        #     context_embeddings, context_mask = compute_graph_embedding(context_tokens, graph_vocab_class, context_mask.shape[1])
+        # context_embeddings, context_mask = compute_graph_embedding(context_tokens, graph_vocab_class, context_mask.shape[1])
         # else:
         #     context_embeddings, context_mask = compute_graph_embedding(context_tokens, graph_vocab_class, context_mask.shape[1],
         #                                                     np.array([ans_token[0] for ans_token in ans_tokens]))
         
         # Make into a Batch object
-        batch = Batch(context_ids, context_tokens, qn_ids, qn_mask, qn_tokens, ans_ids, ans_mask, ans_tokens)
+        batch = Batch(context_ids, context_tokens, qn_ids, qn_mask, qn_tokens, ans_ids, ans_mask, ans_tokens, batch_size)
+        # print(len(batch))
         yield batch
 
     return

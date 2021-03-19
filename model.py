@@ -195,16 +195,16 @@ class QAModel(nn.Module):
         self.linear41 = nn.Linear(4*hidden_size,hidden_size)
         self.graph_vocab_class = create_vocab_class(context2id)
         self.context_dimension_compressed = len(self.graph_vocab_class.all_tokens) + len(self.graph_vocab_class.nodes)
+
+        self.encoder = Encoder(self.hidden_size,self.embedding_size, self.keep_prob)
         self.decoder = DecoderRNN(hidden_size,embedding_size,tgt_vocab_size)
 
     def forward(self,qn_ids,context_ids,ans_ids,qn_mask):
         self.context_embs = self.embedding(context_ids)
-        context_encoder = Encoder(self.hidden_size,self.embedding_size, self.keep_prob)
-        context_hiddens = context_encoder(self.context_embs)  # (batch_size, context_len, hidden_size*2)
+        context_hiddens = self.encoder(self.context_embs)  # (batch_size, context_len, hidden_size*2)
 
         self.qn_embs = self.get_embeddings(self.ans2id,self.emb_matrix,qn_ids,self.embedding_size)
-        question_encoder = Encoder(self.hidden_size,self.embedding_size, self.keep_prob)
-        question_hiddens = question_encoder(self.qn_embs)  # (batch_size, question_len, hidden_size*2)
+        question_hiddens = self.encoder(self.qn_embs)  # (batch_size, question_len, hidden_size*2)
         question_last_hidden = question_hiddens[:, -1, :]
         question_last_hidden = self.linear21(question_last_hidden)
 
@@ -215,11 +215,13 @@ class QAModel(nn.Module):
         blended_reps_final = self.linear41(blended_reps)
         self.dec_hidden = question_last_hidden
         # Idhar for loop lagaane ka hai
+        decoder_outputs = []
         for idx in range(len(ans_ids)):
             self.dec_output,self.dec_hidden = self.decoder(self.ans_ids[idx],self.dec_hidden,blended_reps_final)
+            decoder_outputs.append(self.dec_output)
             # topk
             # loss add
-        return self.dec_output, self.dec_hidden #, loss
+        return self.decoder_outputs #, loss
         
         # ----------------------------------- #
         

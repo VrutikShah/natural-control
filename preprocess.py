@@ -9,17 +9,17 @@ import re
 import nltk
 import os
 
-_PAD = b"<pad>"
-_UNK = b"<unk>"
-_SOS = b"<sos>"
+_PAD = r"<pad>"
+_UNK = r"<unk>"
+_SOS = r"<sos>"
 _START_VOCAB = [_PAD, _UNK, _SOS]
 PAD_ID = 0
 UNK_ID = 1
 SOS_ID = 2
 
 # Regular expressions used to tokenize.
-_WORD_SPLIT = re.compile(b"([.,!?\"':;()/-])")
-_DIGIT_RE = re.compile(br"\d")
+_WORD_SPLIT = re.compile(r"([.,!?\"':;()/-])")
+_DIGIT_RE = re.compile(r"\d")
 _ATTRIBUTE_RE = r'\d+[A-Za-z]+'
 _NODE_RE = r'^[O|R|K|B|C|H|L]-\d+'
 _ACT_RE = r'[A-Za-z]+'
@@ -38,9 +38,9 @@ class Vocab:
         self.node2id = node2id
         self.edge2id = edge2id
         self.flag2id = flag2id
-        self.nodes = node2id.keys()
-        self.edges = edge2id.keys()
-        self.flags = flag2id.keys()
+        self.nodes = list(node2id.keys())
+        self.edges = list(edge2id.keys())
+        self.flags = list(flag2id.keys())
         self.all_tokens = self.flags + self.nodes + self.edges
 
     def tidy_in_triplet(self, tokens):

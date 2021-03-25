@@ -181,8 +181,7 @@ def refill_batches(batches, word2id, context2id, ans2id, context_file, qn_file, 
     # Make into batches and append to the list batches
     for batch_start in range(0, len(examples), batch_size):
         # Note: each of these is a list length batch_size of lists of ints (except on last iter when it might be less than batch_size)
-        context_ids_batch, context_tokens_batch, qn_ids_batch, qn_tokens_batch, ans_span_batch, ans_tokens_batch = zip(
-            *examples[batch_start:batch_start + batch_size])
+        context_ids_batch, context_tokens_batch, qn_ids_batch, qn_tokens_batch, ans_span_batch, ans_tokens_batch = zip(*examples[batch_start:batch_start + batch_size])
 
         batches.append(
             (context_ids_batch, context_tokens_batch, qn_ids_batch, qn_tokens_batch, ans_span_batch, ans_tokens_batch))
@@ -280,7 +279,7 @@ def get_batch_generator(word2id, context2id, ans2id, context_path, qn_path, ans_
         # context_mask = (context_ids != PAD_ID).astype(np.int32)  # shape (batch_size, context_len)
 
         # Make ans_ids into a np array and create ans_mask
-        ans_ids = np.array(ans_ids)
+        ans_ids = np.array(list(ans_ids))
         ans_mask = (ans_ids != PAD_ID).astype(np.int32)
         # print(list(ans_ids), list(context_ids), list(qn_ids))
         # interpret graph as triplets and append the first token

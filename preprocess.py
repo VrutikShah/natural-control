@@ -241,7 +241,7 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
     if not os.path.exists(vocabulary_path):
         print("Creating vocabulary %s from data %s" % (vocabulary_path, data_path))
         vocab = {}
-        with open(data_path, mode="r") as f:
+        with open(data_path, mode="r", encoding="utf-8") as f:
             counter = 0
             for line in f:
                 counter += 1
@@ -260,7 +260,7 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
             vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
             if len(vocab_list) > max_vocabulary_size:
                 vocab_list = vocab_list[:max_vocabulary_size]
-            with open(vocabulary_path, mode="w") as vocab_file:
+            with open(vocabulary_path, mode="w", encoding="utf-8") as vocab_file:
                 for w in vocab_list:
                     vocab_file.write(w + b"\n")
         rev_vocab = vocab_list # a list contain all the tokens
@@ -291,12 +291,14 @@ def initialize_vocabulary(vocabulary_path):
   """
   if os.path.exists(vocabulary_path):
     rev_vocab = []
-    with open(vocabulary_path, mode="r") as f:
+    with open(vocabulary_path, mode="r", encoding="utf-8") as f:
       rev_vocab.extend(f.readlines())
     
     # TODO - CHANGE THE BELOW LINE
     # rev_vocab = [tf.compat.as_bytes(line.strip()) for line in rev_vocab]
+    rev_vocab = [line.strip() for line in rev_vocab]
     vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
+    print(len(vocab.keys()), len(rev_vocab))
     return vocab, rev_vocab
   else:
     raise ValueError("Vocabulary file %s not found.", vocabulary_path)
